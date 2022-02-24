@@ -4,4 +4,5 @@ spdlog/build/*
 mbedtls/mbedtls
 mbedtls/build/*
 !mbedtls/build/compile.sh
+.DS_Store
 
