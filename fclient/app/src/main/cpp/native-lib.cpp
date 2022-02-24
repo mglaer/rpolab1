@@ -2,47 +2,46 @@
 #include <string>
 #include <android/log.h>
 #include <spdlog/spdlog.h>
-#include <spdlog/sinks/android_sink.h>
-
-#include <android/log.h>
-#define LOG_INFO(...) __android_log_print(ANDROID_LOG_INFO, "lab_ndk", __VA_ARGS__)
-
-#include "spdlog/spdlog.h"
 #include "spdlog/sinks/android_sink.h"
-
-#include "mbedtls/entropy.h"
-#include "mbedtls/ctr_drbg.h"
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
 #include <mbedtls/des.h>
 
 mbedtls_entropy_context entropy;
 mbedtls_ctr_drbg_context ctr_drbg;
-char *personalization = "lab-sample-app";
+char *personalization = "fclient-sample-app";
 
-auto logger = spdlog::android_logger_mt("android", "lab_ndk");
+#define LOG_INFO(...) __android_log_print(ANDROID_LOG_INFO, "fclient_ndk", __VA_ARGS__)
+#define SLOG_INFO(...) android_logger->info( __VA_ARGS__ )
+auto android_logger = spdlog::android_logger_mt("android", "fclient_ndk");
 
 extern "C" JNIEXPORT jstring JNICALL
-
-Java_com_example_lab_MainActivity_stringFromJNI(
+Java_ru_iu3_fclient_MainActivity_stringFromJNI(
         JNIEnv* env,
         jobject /* this */) {
+
+    LOG_INFO("Hello from Android log %d", 2022);
+    SLOG_INFO("Hello from SpdLog {}", 2022);
+
     std::string hello = "Hello from C++";
-    LOG_INFO("Hello from c++ %d", 2022);
-    //logger->info("Hello from spdlog {0}", 2022);
     return env->NewStringUTF(hello.c_str());
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_example_lab_MainActivity_initRng(JNIEnv *env, jclass clazz) {
+Java_ru_iu3_fclient_MainActivity_initRng(JNIEnv *env,
+                                         jclass clazz) {
     mbedtls_entropy_init( &entropy );
     mbedtls_ctr_drbg_init( &ctr_drbg );
 
-    return mbedtls_ctr_drbg_seed( &ctr_drbg , mbedtls_entropy_func, &entropy,
+    return mbedtls_ctr_drbg_seed( &ctr_drbg ,
+                                  mbedtls_entropy_func, &entropy,
                                   (const unsigned char *) personalization,
                                   strlen( personalization ) );
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_lab_MainActivity_randomBytes(JNIEnv *env, jclass, jint no) {
+Java_ru_iu3_fclient_MainActivity_randomBytes(JNIEnv *env,
+                                             jclass, jint no) {
     uint8_t * buf = new uint8_t [no];
     mbedtls_ctr_drbg_random(&ctr_drbg, buf, no);
     jbyteArray rnd = env->NewByteArray(no);
@@ -53,9 +52,9 @@ Java_com_example_lab_MainActivity_randomBytes(JNIEnv *env, jclass, jint no) {
 
 // https://tls.mbed.org/api/des_8h.html
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_lab_MainActivity_encrypt(JNIEnv *env, jclass, jbyteArray key, jbyteArray data)
+Java_ru_iu3_fclient_MainActivity_encrypt(JNIEnv *env,
+                                         jclass, jbyteArray key, jbyteArray data)
 {
-
     jsize ksz = env->GetArrayLength(key);
     jsize dsz = env->GetArrayLength(data);
     if ((ksz != 16) || (dsz <= 0)) {
@@ -66,7 +65,7 @@ Java_com_example_lab_MainActivity_encrypt(JNIEnv *env, jclass, jbyteArray key, j
 
     jbyte * pkey = env->GetByteArrayElements(key, 0);
 
-    // PKCS#5 padding
+    // Паддинг PKCS#5
     int rst = dsz % 8;
     int sz = dsz + 8 - rst;
     uint8_t * buf = new uint8_t[sz];
@@ -77,7 +76,8 @@ Java_com_example_lab_MainActivity_encrypt(JNIEnv *env, jclass, jbyteArray key, j
     mbedtls_des3_set2key_enc(&ctx, (uint8_t *)pkey);
     int cn = sz / 8;
     for (int i = 0; i < cn; i++)
-        mbedtls_des3_crypt_ecb(&ctx, buf + i*8, buf + i*8);
+        mbedtls_des3_crypt_ecb(&ctx, buf + i*8,
+                               buf + i*8);
     jbyteArray dout = env->NewByteArray(sz);
     env->SetByteArrayRegion(dout, 0, sz, (jbyte *)buf);
     delete[] buf;
@@ -86,9 +86,9 @@ Java_com_example_lab_MainActivity_encrypt(JNIEnv *env, jclass, jbyteArray key, j
     return dout;
 }
 
-
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_lab_MainActivity_decrypt(JNIEnv *env, jclass, jbyteArray key, jbyteArray data)
+Java_ru_iu3_fclient_MainActivity_decrypt(JNIEnv *env,
+                                         jclass, jbyteArray key, jbyteArray data)
 {
     jsize ksz = env->GetArrayLength(key);
     jsize dsz = env->GetArrayLength(data);
@@ -109,7 +109,7 @@ Java_com_example_lab_MainActivity_decrypt(JNIEnv *env, jclass, jbyteArray key, j
     for (int i = 0; i < cn; i++)
         mbedtls_des3_crypt_ecb(&ctx, buf + i*8, buf +i*8);
 
-    //PKCS#5.simplified. need to check every padded byte for security reasons
+    //PKCS#5. упрощено. по соображениям безопасности надо проверить каждый байт паддинга
     int sz = dsz - 8 + buf[dsz-1];
 
     jbyteArray dout = env->NewByteArray(sz);
@@ -119,3 +119,4 @@ Java_com_example_lab_MainActivity_decrypt(JNIEnv *env, jclass, jbyteArray key, j
     env->ReleaseByteArrayElements(data, pdata, 0);
     return dout;
 }
+

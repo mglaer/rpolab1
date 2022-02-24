@@ -1,4 +1,4 @@
-package com.example.lab;
+package ru.iu3.fclient;
 
 import org.junit.Test;
 
